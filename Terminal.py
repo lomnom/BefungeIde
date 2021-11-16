@@ -122,18 +122,19 @@ mappings={
 	24:"ctrl x",
 	3:"ctrl c",
 	2:"ctrl b",
-	14:"ctrl n"
+	14:"ctrl n",
+	ord("\033"):"escape"
 }
 def proccessTermChar(char):
 	if ord(char) in mappings:
-		return mappings[ord[char]]
+		return mappings[ord(char)]
 	else: 
 		return char
 
 arrowChars={"A":"up","B":"down","C":"right","D":"left"}
 arrowModifyers={"2":"shift","3":"option","4":"shift option"}
 def isarrow(key):
-	if key.startswith('\033['):
+	if len(key)==2 or len(key)==4 or key[0]=='\033[':
 		key=key[2:]
 		if len(key)==1: #maybe non-shifted key
 			if key in arrowChars:
@@ -149,13 +150,35 @@ def isarrow(key):
 	return False
 
 def stdinempty():
-	return not select.select([sys.stdin,],[],[],0.0)[0]
+	return select.select([sys.stdin,],[],[],0.0)[0]==[]
 
-def readall():
-	data=""
+def readall(blocking=True):
+	data=stdin.read(1) if blocking else ""
 	while not stdinempty():
 		data+=stdin.read(1)
 	return data
+
+def keys():
+	while True:
+		data=readall()
+		while data!="":
+			if data[0]=='\033' and len(data)>1: #arrow key?
+				if data[1]=='[':
+					data=data[2:]
+					if data.startswith("1;"):
+						data=data[2:]
+						if data[0] in arrowModifyers:
+							modifyer=arrowModifyers[data[0]]
+							data=data[1:]
+							if data in arrowChars:
+								yield modifyer+" "+arrowChars[data[0]]
+								data=data[1:]
+					elif data[0] in arrowChars:
+						yield arrowChars[data[0]]
+						data=data[1:]
+			else:
+				yield proccessTermChar(data[0])
+				data=data[1:]
 
 class KeyHandler:
 		def __init__(self,actions):

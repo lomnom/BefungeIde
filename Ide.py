@@ -3,13 +3,10 @@ import Befunge as bf
 
 term.raw()
 term.noctrlc()
-while True:
-	stuff=term.read(1)
-	if stuff=='q':
+for key in term.keys():
+	if key=="ctrl x":
 		break
-	elif stuff.isalnum():
-		print(stuff+" ({})".format(ord(stuff)))
 	else:
-		print("({})".format(ord(stuff)))
+		print(key)
 term.ctrlc()
 term.unraw()
