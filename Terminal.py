@@ -131,78 +131,74 @@ def proccessTermChar(char):
 	else: 
 		return char
 
-arrowChars={"A":"up","B":"down","C":"right","D":"left"}
-arrowModifyers={"2":"shift","3":"option","4":"shift option"}
-def isarrow(key):
-	if len(key)==2 or len(key)==4 or key[0]=='\033[':
-		key=key[2:]
-		if len(key)==1: #maybe non-shifted key
-			if key in arrowChars:
-				return arrowChars[key]
-		elif len(key)==4: #modified key
-			if key.startswith("1;"):
-				key=key[2:]
-				if key[0] in arrowModifyers:
-					modifyer=arrowModifyers[key[0]]
-					key=key[1:]
-					if key in arrowChars:
-						return modifyer+" "+arrowChars[key]
-	return False
-
 def stdinempty():
 	return select.select([sys.stdin,],[],[],0.0)[0]==[]
 
-def readall(blocking=True):
+def readall(blocking=True): #if its one big write (eg. arrow key), it will onnly get first char :(
 	data=stdin.read(1) if blocking else ""
 	while not stdinempty():
 		data+=stdin.read(1)
 	return data
 
+arrowChars={"A":"up","B":"down","C":"right","D":"left"}
+arrowModifyers={"2":"shift","3":"option","4":"shift option"}
 def keys():
 	while True:
 		data=readall()
 		while data!="":
-			if data[0]=='\033' and len(data)>1: #arrow key?
-				if data[1]=='[':
+			if data[0]=='\033' and len(data)>1 and data[1]=='[': #arrow key?
+				data=data[2:]
+				if data.startswith("1"):
+					data+=sys.stdin.read(3)
 					data=data[2:]
-					if data.startswith("1;"):
-						data=data[2:]
-						if data[0] in arrowModifyers:
-							modifyer=arrowModifyers[data[0]]
-							data=data[1:]
-							if data in arrowChars:
-								yield modifyer+" "+arrowChars[data[0]]
-								data=data[1:]
-					elif data[0] in arrowChars:
-						yield arrowChars[data[0]]
+					if data[0] in arrowModifyers:
+						modifyer=arrowModifyers[data[0]]
 						data=data[1:]
+						if data[0] in arrowChars:
+							yield modifyer+" "+arrowChars[data[0]]
+							data=data[1:]
+				elif data[0] in arrowChars:
+					yield arrowChars[data[0]]
+					data=data[1:]
+			elif data[0]=='\033' and len(data)==1:
+				data+=sys.stdin.read(2)
 			else:
 				yield proccessTermChar(data[0])
 				data=data[1:]
+
+class Action:
+	def __init__(self,func,*args,**kwargs):
+		self.func=func
+		self.args=args
+		self.kwargs=kwargs
+	def run(self):
+		return self.func(*self.args,**self.kwargs)
 
 class KeyHandler:
 		def __init__(self,actions):
 			self.actions=actions
 			self.thread=None
-			self.delay=0.05
 			self.tasks=[]
+			self.delay=0.01
 
 		def _handle(self):
-			while self.thread!=None:
+			for key in keys():
 				try:
-					key=stdin.read(1)
 					action=self.actions[key]
 				except KeyError:
 					try:
 						action=self.actions["default"]
+						action=Action(action.func,key,*action.args,**action.kwargs)
 					except KeyError:
 						continue
-				self.tasks+=[[key,thread(target=action[0],args=action[1])]]
+				self.tasks+=[[key,thread(target=action.run)]]
 				self.tasks[-1][1].start()
 				for task in reversed(range(len(self.tasks))):
 					if not self.tasks[task][1].is_alive():
 						self.tasks.pop(task)
-				wait(self.delay)
+				wait(self.delay) #timeframe where key handler can be killed (sketch 1000)
+				if self.thread==None:
+					break
 
 		def handle(self):
 			if self.thread==None:

@@ -1,12 +1,18 @@
 import Terminal as term
 import Befunge as bf
 
+def halt():
+	global handler,running
+	handler.stop()
+	term.ctrlc()
+	term.unraw()
+
 term.raw()
 term.noctrlc()
-for key in term.keys():
-	if key=="ctrl x":
-		break
-	else:
-		print(key)
-term.ctrlc()
-term.unraw()
+
+handler=term.KeyHandler({
+	"ctrl x":term.Action(halt),
+	"default":term.Action(print)
+})
+
+handler.handle()
